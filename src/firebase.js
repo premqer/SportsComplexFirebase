@@ -1,6 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
+import { getFirestore, collection, addDoc } from 'firebase/firestore';
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -19,3 +20,29 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
+
+const db = getFirestore(app);
+
+const addEventToFirestore = async (eventData) => {
+  try {
+    await addDoc(collection(db, 'events'), eventData);
+    console.log('Event added to Firestore');
+  } catch (error) {
+    console.error('Error adding event to Firestore: ', error);
+  }
+};
+
+// const fetchEventsFromFirestore = async () => {
+//   try {
+//     const snapshot = await firestore.collection('events').get();
+//     const events = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+//     console.log('Events fetched from Firestore: ', events);
+//     return events;
+//   } catch (error) {
+//     console.error('Error fetching events from Firestore: ', error);
+//     return [];
+//   }
+// };
+
+export default app;
+export { addEventToFirestore };
