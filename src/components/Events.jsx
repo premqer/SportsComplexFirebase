@@ -1,84 +1,124 @@
-import React, { useState } from 'react'
-import { EventBox } from './EventBox'
-import Event1Image from './img/Event1.jpg'
-import { addEventToFirestore } from '../firebase';
+import React, { useState, useEffect } from 'react';
+import { EventBox } from './EventBox';
+import { db } from '../firebase';
+import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
+
+async function addDataToFireStore(newEvent) {
+  try {
+    const docRef = await addDoc(collection(db, 'events'), {
+      image: newEvent.image,
+      name: newEvent.name,
+      date: newEvent.date,
+      placesAvailable: newEvent.placesAvailable,
+    });
+    console.log('Written with ID: ', docRef.id);
+    return docRef.id; // return the ID of the newly created document
+  } catch (error) {
+    console.error('Error adding event', error);
+    return null;
+  }
+}
+
+async function fetchEventsFromFirestore() {
+  const querySnapshot = await getDocs(collection(db, 'events'));
+  const events = querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+  return events;
+}
+
+async function deleteEventFromFirestore(eventId) {
+  try {
+    await deleteDoc(doc(db, 'events', eventId));
+    console.log('Event deleted successfully');
+    return true;
+  } catch (error) {
+    console.error('Error deleting event: ', error);
+    return false;
+  }
+}
 
 const Events = () => {
-    const [events, setEvents] = useState([
-        // {
-        //     image: Event1Image,
-        //     name: 'Event 1',
-        //     date: '6/9/2024',
-        //     placesAvailable: 100,
-        //     onParticipate: () => alert('Participate in Event 1')
-        // }
-    ]);
+  const [events, setEvents] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRemoveMode, setIsRemoveMode] = useState(false);
+  const [newEvent, setNewEvent] = useState({
+    image: '',
+    name: '',
+    date: '',
+    placesAvailable: '',
+  });
 
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isRemoveMode, setIsRemoveMode] = useState(false);
-    const [newEvent, setNewEvent] = useState({
+  useEffect(() => {
+    async function loadEvents() {
+      const fetchedEvents = await fetchEventsFromFirestore();
+      setEvents(fetchedEvents);
+    }
+    loadEvents();
+  }, []);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setNewEvent({ ...newEvent, [name]: value });
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewEvent({ ...newEvent, image: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAddEvent = async (e) => {
+    e.preventDefault();
+    console.log('Adding event:', newEvent);
+    const eventId = await addDataToFireStore(newEvent);
+    if (eventId) {
+      const updatedEvents = await fetchEventsFromFirestore();
+      setEvents(updatedEvents);
+      setIsModalOpen(false);
+      setNewEvent({
         image: '',
         name: '',
         date: '',
         placesAvailable: '',
-        // onParticipate: () => {}
-    })
+      });
+      alert('Event added successfully');
+    } else {
+      alert('Failed to add event');
+    }
+  };
 
-    const handleInputChange = (e) => {
-        const {name, value} = e.target;
-        setNewEvent({...newEvent, [name]: value});
-    };
-
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setNewEvent({ ...newEvent, image: reader.result });
-          };
-          reader.readAsDataURL(file);
-        }
-      };
-
-      const handleAddEvent = () => {
-        addEventToFirestore(newEvent)
-          .then(() => {
-            console.log('Event added successfully to Firestore');
-            setEvents([...events, newEvent]);
-            setIsModalOpen(false);
-            setNewEvent({
-              image: '',
-              name: '',
-              date: '',
-              placesAvailable: '',
-              onParticipate: () => {}
-            });
-          })
-          .catch((error) => {
-            console.error('Error adding event to Firestore: ', error);
-          });
-      };
-
-    const handleRemoveEvent = (index) => {
-        const updatedEvents = events.filter((_, i) => i !== index);
-        setEvents(updatedEvents);
-      };
+  const handleRemoveEvent = async (eventId) => {
+    const deleted = await deleteEventFromFirestore(eventId);
+    if (deleted) {
+      setEvents(events.filter(event => event.id !== eventId));
+      alert('Event deleted successfully');
+    } else {
+      alert('Failed to delete event');
+    }
+  };
 
   return (
-<div className='p-4'>
-      <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-        {events.map((event, index) => (
+    <div className="p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {events.map((event) => (
           <EventBox
-            key={index}
+            key={event.id}
             event={event}
-            onRemove={() => handleRemoveEvent(index)}
+            onRemove={() => handleRemoveEvent(event.id)}
             isRemoveMode={isRemoveMode}
           />
         ))}
       </div>
-      <div className='mt-4'>
+      <div className="mt-4">
         <button
-          className='bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mr-2'
+          className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mr-2"
           onClick={() => setIsModalOpen(true)}
         >
           Add Event
@@ -96,7 +136,7 @@ const Events = () => {
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <h3 className="text-lg leading-6 font-medium text-gray-900">Create New Event</h3>
             <div className="mt-2">
-              <form>
+              <form onSubmit={handleAddEvent}>
                 <div className="mb-4">
                   <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="name">
                     Event Name
@@ -115,7 +155,7 @@ const Events = () => {
                     Date
                   </label>
                   <input
-                    type="text"
+                    type="date"
                     name="date"
                     id="date"
                     value={newEvent.date}
@@ -163,8 +203,7 @@ const Events = () => {
                 </div>
                 <div className="flex items-center justify-between">
                   <button
-                    type="button"
-                    onClick={handleAddEvent}
+                    type="submit"
                     className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
                   >
                     Add Event
@@ -186,5 +225,4 @@ const Events = () => {
   );
 }
 
-
-export default Events
+export default Events;

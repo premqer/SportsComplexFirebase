@@ -1,7 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, runTransaction } from 'firebase/firestore';
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -44,5 +44,31 @@ const addEventToFirestore = async (eventData) => {
 //   }
 // };
 
+async function participateInEvent(eventId) {
+  const eventRef = doc(db, 'events', eventId);
+  try {
+    await runTransaction(db, async (transaction) => {
+      const eventDoc = await transaction.get(eventRef);
+      if (!eventDoc.exists()) {
+        throw "Event does not exist!";
+      }
+      const currentPlacesAvailable = eventDoc.data().placesAvailable;
+      if (currentPlacesAvailable > 0) {
+        transaction.update(eventRef, { placesAvailable: currentPlacesAvailable - 1 });
+      } else {
+        throw "No places available for this event!";
+      }
+    });
+    console.log("Participation successful");
+    return true;
+  } catch (error) {
+    console.error("Error participating in event: ", error);
+    return false;
+  }
+}
+
+
 export default app;
+export {db};
 export { addEventToFirestore };
+export { participateInEvent };
